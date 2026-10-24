@@ -1,0 +1,78 @@
+import telebot
+import json
+import os
+from datetime import date  # <--- ВОТ ЭТА СТРОКА
+
+TOKEN = " "
+bot = telebot.TeleBot(TOKEN)
+
+FILE_NAME = "habits.json"
+
+# Функция для безопасной загрузки (создает привычки, если файл пуст)
+def get_habits():
+    if not os.path.exists(FILE_NAME):
+        habits = []
+    else:
+        try:
+            with open(FILE_NAME, "r", encoding="utf-8") as f:
+                habits = json.load(f)
+        except:
+            habits = []
+            
+    if not habits:
+        habits = [
+            {"name": "Сон 7–8 часов", "done": False, "streak": 0, "created_at": str(date.today())},
+            {"name": "Код 30 минут", "done": False, "streak": 0, "created_at": str(date.today())},
+            {"name": "Прогулка 10 минут", "done": False, "streak": 0, "created_at": str(date.today())}
+        ]
+        with open(FILE_NAME, "w", encoding="utf-8") as f:
+            json.dump(habits, f, ensure_ascii=False, indent=2)
+    return habits
+
+@bot.message_handler(commands=['start'])
+def start_message(message):
+    bot.send_message(message.chat.id, "Привет! Я твой трекер.\n/list — список\n/done 1 — отметить")
+
+@bot.message_handler(commands=['list'])
+def list_message(message):
+    habits = get_habits() # Загружаем или создаем
+
+    text = "📋 Твои привычки:\n\n"
+    for i, item in enumerate(habits, 1):
+        status = "✅" if item.get("done") else "❌"
+        text += f"{i}. {status} {item['name']} (Серия: {item.get('streak', 0)})\n"
+
+    bot.send_message(message.chat.id, text)
+
+@bot.message_handler(commands=['done'])
+def done_message(message):
+    parts = message.text.split()
+    
+    if len(parts) < 2:
+        bot.reply_to(message, "Напиши номер. Например: /done 1")
+        return
+        
+    try:
+        idx = int(parts[1]) - 1 
+        habits = get_habits() # Загружаем
+            
+        if 0 <= idx < len(habits):
+            habits[idx]["done"] = True
+            habits[idx]["streak"] = habits[idx].get("streak", 0) + 1
+            
+            with open(FILE_NAME, "w", encoding="utf-8") as f:
+                json.dump(habits, f, ensure_ascii=False, indent=2)
+                
+            bot.reply_to(message, f"✅ Отмечено: {habits[idx]['name']}!")
+        else:
+            bot.reply_to(message, f"Нет такого номера. В списке всего {len(habits)} привычек.")
+            
+    except ValueError:
+        bot.reply_to(message, "Напиши цифру. Например: /done 1")
+
+@bot.message_handler(content_types=['text'])
+def echo_message(message):
+    bot.reply_to(message, f"Ты написал: {message.text}")
+
+print("Бот запущен и работает...")
+bot.polling(none_stop=True)
